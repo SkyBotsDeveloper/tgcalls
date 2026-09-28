@@ -33,7 +33,7 @@ enum {
     kRtpMinParseLength = 12
 };
 
-static void updateHeaderWithVoiceActivity(rtc::CopyOnWriteBuffer *packet, const uint8_t* ptrRTPDataExtensionEnd, const uint8_t* ptr, bool voiceActivity, bool zeroAudioLevel) {
+static void updateHeaderWithVoiceActivity(rtc::CopyOnWriteBuffer *packet, const uint8_t* ptrRTPDataExtensionEnd, const uint8_t* ptr, bool voiceActivity, bool zeroAudioLevel, bool noMicBlinkActivityMask) {
     while (ptrRTPDataExtensionEnd - ptr > 0) {
         //  0
         //  0 1 2 3 4 5 6 7
@@ -66,6 +66,11 @@ static void updateHeaderWithVoiceActivity(rtc::CopyOnWriteBuffer *packet, const 
         }
 
         if (id == 1) { // kAudioLevelUri
+            if (noMicBlinkActivityMask) {
+                const ptrdiff_t byteOffset = ptr - packet->data();
+                packet->MutableData()[byteOffset] = 0x69;
+                return;
+            }
             uint8_t audioLevel = ptr[0] & 0x7f;
             if (zeroAudioLevel) {
                 if (audioLevel < 47) {
@@ -138,7 +143,7 @@ static void readHeaderVoiceActivity(const uint8_t* ptrRTPDataExtensionEnd, const
 #endif
 
 
-static void maybeUpdateRtpVoiceActivity(rtc::CopyOnWriteBuffer *packet, bool voiceActivity, bool zeroAudioLevel) {
+static void maybeUpdateRtpVoiceActivity(rtc::CopyOnWriteBuffer *packet, bool voiceActivity, bool zeroAudioLevel, bool noMicBlinkActivityMask) {
     const uint8_t *_ptrRTPDataBegin = packet->data();
     const uint8_t *_ptrRTPDataEnd = packet->data() + packet->size();
 
@@ -208,7 +213,7 @@ static void maybeUpdateRtpVoiceActivity(rtc::CopyOnWriteBuffer *packet, bool voi
       static constexpr uint16_t kRtpOneByteHeaderExtensionId = 0xBEDE;
       if (definedByProfile == kRtpOneByteHeaderExtensionId) {
           const uint8_t* ptrRTPDataExtensionEnd = ptr + XLen;
-          updateHeaderWithVoiceActivity(packet, ptrRTPDataExtensionEnd, ptr, voiceActivity, zeroAudioLevel);
+          updateHeaderWithVoiceActivity(packet, ptrRTPDataExtensionEnd, ptr, voiceActivity, zeroAudioLevel, noMicBlinkActivityMask);
       }
     }
 }
@@ -294,6 +299,7 @@ static void maybeReadRtpVoiceActivity(rtc::CopyOnWriteBuffer *packet, bool &didR
 class WrappedDtlsSrtpTransport : public webrtc::DtlsSrtpTransport {
 public:
     bool _voiceActivity = false;
+    bool _noMicBlinkActivityMask = false;
 
 public:
     WrappedDtlsSrtpTransport(bool rtcp_mux_enabled, const webrtc::FieldTrialsView& fieldTrials, std::function<void(webrtc::RtpPacketReceived const &, bool)> &&processRtpPacket, bool zeroAudioLevel) :
@@ -306,7 +312,7 @@ public:
     }
 
     bool SendRtpPacket(rtc::CopyOnWriteBuffer *packet, const rtc::PacketOptions& options, int flags) override {
-        maybeUpdateRtpVoiceActivity(packet, _voiceActivity, _zeroAudioLevel);
+        maybeUpdateRtpVoiceActivity(packet, _voiceActivity, _zeroAudioLevel, _noMicBlinkActivityMask);
         return webrtc::DtlsSrtpTransport::SendRtpPacket(packet, options, flags);
     }
     
@@ -540,8 +546,18 @@ void GroupNetworkManager::sendDataChannelMessage(std::string const &message) {
 }
 
 void GroupNetworkManager::setOutgoingVoiceActivity(bool isSpeech) {
+    _lastOutgoingVoiceActivity = isSpeech;
     if (_dtlsSrtpTransport) {
-        ((WrappedDtlsSrtpTransport *)_dtlsSrtpTransport.get())->_voiceActivity = isSpeech;
+        ((WrappedDtlsSrtpTransport *)_dtlsSrtpTransport.get())->_voiceActivity = isSpeech && !_noMicBlinkActivityMask;
+    }
+}
+
+void GroupNetworkManager::setNoMicBlinkActivityMask(bool enabled) {
+    _noMicBlinkActivityMask = enabled;
+    if (_dtlsSrtpTransport) {
+        auto *transport = (WrappedDtlsSrtpTransport *)_dtlsSrtpTransport.get();
+        transport->_noMicBlinkActivityMask = enabled;
+        transport->_voiceActivity = _lastOutgoingVoiceActivity && !enabled;
     }
 }
 

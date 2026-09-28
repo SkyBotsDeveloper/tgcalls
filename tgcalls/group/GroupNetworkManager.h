@@ -79,6 +79,7 @@ public:
     void sendDataChannelMessage(std::string const &message);
 
     void setOutgoingVoiceActivity(bool isSpeech);
+    void setNoMicBlinkActivityMask(bool enabled);
 
     webrtc::RtpTransport *getRtpTransport();
 
@@ -107,6 +108,8 @@ private:
     std::function<void(std::string const &)> _dataChannelMessageReceived;
     std::function<void(uint32_t, uint8_t, bool)> _audioActivityUpdated;
     bool _zeroAudioLevel = false;
+    bool _noMicBlinkActivityMask = false;
+    bool _lastOutgoingVoiceActivity = false;
     std::function<void(uint32_t)> _anyActivityUpdated;
 
     std::unique_ptr<rtc::NetworkMonitorFactory> _networkMonitorFactory;

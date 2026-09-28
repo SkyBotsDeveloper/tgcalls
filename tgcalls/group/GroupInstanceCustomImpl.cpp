@@ -3972,6 +3972,12 @@ public:
         onUpdatedIsMuted();
     }
 
+    void setNoMicBlinkActivityMask(bool enabled) {
+        _networkManager->perform([enabled](GroupNetworkManager *networkManager) {
+            networkManager->setNoMicBlinkActivityMask(enabled);
+        });
+    }
+
     void onUpdatedIsMuted() {
         if (_outgoingAudioChannel) {
             _threads->getWorkerThread()->BlockingCall([this]() {
@@ -4601,6 +4607,12 @@ void GroupInstanceCustomImpl::removeIncomingVideoSource(uint32_t ssrc) {
 void GroupInstanceCustomImpl::setIsMuted(bool isMuted) {
     _internal->perform([isMuted](GroupInstanceCustomInternal *internal) {
         internal->setIsMuted(isMuted);
+    });
+}
+
+void GroupInstanceCustomImpl::setNoMicBlinkActivityMask(bool enabled) {
+    _internal->perform([enabled](GroupInstanceCustomInternal *internal) {
+        internal->setNoMicBlinkActivityMask(enabled);
     });
 }
 

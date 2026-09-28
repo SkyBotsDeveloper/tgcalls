@@ -32,6 +32,7 @@ public:
     void removeIncomingVideoSource(uint32_t ssrc);
 
     void setIsMuted(bool isMuted);
+    void setNoMicBlinkActivityMask(bool enabled);
     void setIsNoiseSuppressionEnabled(bool isNoiseSuppressionEnabled);
     void setVideoCapture(std::shared_ptr<VideoCaptureInterface> videoCapture);
     void setVideoSource(std::function<webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>()> getVideoSource);
